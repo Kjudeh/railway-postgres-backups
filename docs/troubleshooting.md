@@ -1063,9 +1063,9 @@ If issues persist:
    - [Restore Guide](restore.md)
 
 5. **Open an issue**
-   - [GitHub Issues](https://github.com/yourusername/postgres-backup-railway/issues)
+   - [GitHub Issues](https://github.com/Kjudeh/railway-postgres-backups/issues)
    - Include: logs, configuration (redact secrets!), error messages
 
 6. **Search existing issues**
    - Someone may have had the same problem
-   - [Search Issues](https://github.com/yourusername/postgres-backup-railway/issues)
+   - [Search Issues](https://github.com/Kjudeh/railway-postgres-backups/issues)

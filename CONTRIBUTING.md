@@ -11,7 +11,7 @@ Be respectful, inclusive, and professional. We're all here to make better softwa
 ### Reporting Bugs
 
 Before submitting a bug report:
-1. Check existing [GitHub Issues](https://github.com/yourusername/postgres-backup-railway/issues)
+1. Check existing [GitHub Issues](https://github.com/Kjudeh/railway-postgres-backups/issues)
 2. Verify you're using the latest version
 3. Test with the provided test suite
 
@@ -87,8 +87,8 @@ Enhancement suggestions are welcome! Please include:
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/postgres-backup-railway.git
-   cd postgres-backup-railway
+   git clone https://github.com/Kjudeh/railway-postgres-backups.git
+   cd railway-postgres-backups
    ```
 
 2. **Run tests**
@@ -332,7 +332,7 @@ RUN apk add --no-cache \
 
 ## Questions?
 
-- Open a [GitHub Discussion](https://github.com/yourusername/postgres-backup-railway/discussions)
+- Open a [GitHub Discussion](https://github.com/Kjudeh/railway-postgres-backups/discussions)
 - Check existing [documentation](docs/)
 - Ask in pull request comments
 

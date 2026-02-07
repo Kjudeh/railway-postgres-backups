@@ -680,7 +680,7 @@ Before deploying to production:
 ## Security Questions?
 
 For security questions (not vulnerabilities):
-- GitHub Discussions: https://github.com/yourusername/postgres-backup-railway/discussions
+- GitHub Discussions: https://github.com/Kjudeh/railway-postgres-backups/discussions
 - Email: karam.judeh@gmail.com
 
 For vulnerabilities, use the reporting process above.

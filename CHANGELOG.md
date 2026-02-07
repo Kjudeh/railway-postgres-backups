@@ -147,10 +147,10 @@ Complete rewrite. Recommended to deploy fresh:
 ## Support
 
 For questions about specific versions:
-- [GitHub Issues](https://github.com/yourusername/postgres-backup-railway/issues)
-- [GitHub Discussions](https://github.com/yourusername/postgres-backup-railway/discussions)
+- [GitHub Issues](https://github.com/Kjudeh/railway-postgres-backups/issues)
+- [GitHub Discussions](https://github.com/Kjudeh/railway-postgres-backups/discussions)
 - [Documentation](docs/)
 
-[Unreleased]: https://github.com/yourusername/postgres-backup-railway/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/yourusername/postgres-backup-railway/releases/tag/v1.0.0
-[0.1.0]: https://github.com/yourusername/postgres-backup-railway/releases/tag/v0.1.0
+[Unreleased]: https://github.com/Kjudeh/railway-postgres-backups/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/Kjudeh/railway-postgres-backups/releases/tag/v1.0.0
+[0.1.0]: https://github.com/Kjudeh/railway-postgres-backups/releases/tag/v0.1.0

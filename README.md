@@ -1,6 +1,6 @@
 # PostgreSQL Backup & Restore Verification
 
-[![Tests](https://github.com/yourusername/postgres-backup-railway/actions/workflows/test.yml/badge.svg)](https://github.com/yourusername/postgres-backup-railway/actions/workflows/test.yml)
+[![Tests](https://github.com/Kjudeh/railway-postgres-backups/actions/workflows/test.yml/badge.svg)](https://github.com/Kjudeh/railway-postgres-backups/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -427,8 +427,8 @@ MIT License - see **[LICENSE](LICENSE)** for details.
 
 ## Support
 
-- **Issues:** [GitHub Issues](https://github.com/yourusername/postgres-backup-railway/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/yourusername/postgres-backup-railway/discussions)
+- **Issues:** [GitHub Issues](https://github.com/Kjudeh/railway-postgres-backups/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/Kjudeh/railway-postgres-backups/discussions)
 - **Documentation:** [docs/](docs/)
 
 ## Changelog
