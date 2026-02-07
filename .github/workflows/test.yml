@@ -1,0 +1,333 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Start test services
+        run: |
+          cd tests
+          docker-compose -f docker-compose.test.yml up -d postgres minio minio-setup
+
+      - name: Wait for services to be healthy
+        run: |
+          cd tests
+          echo "Waiting for PostgreSQL..."
+          for i in {1..30}; do
+            if docker-compose -f docker-compose.test.yml exec -T postgres pg_isready -U testuser -d testdb; then
+              echo "PostgreSQL is ready"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+
+          echo "Waiting for MinIO..."
+          for i in {1..30}; do
+            if curl -f http://localhost:9000/minio/health/live; then
+              echo "MinIO is ready"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+
+      - name: Seed test data
+        run: |
+          cd tests
+          docker-compose -f docker-compose.test.yml exec -T postgres psql -U testuser -d testdb <<EOF
+          CREATE TABLE test_table (
+              id SERIAL PRIMARY KEY,
+              name VARCHAR(100),
+              created_at TIMESTAMP DEFAULT NOW()
+          );
+
+          INSERT INTO test_table (name) VALUES
+              ('Test Record 1'),
+              ('Test Record 2'),
+              ('Test Record 3');
+
+          CREATE INDEX idx_test_name ON test_table(name);
+          EOF
+
+      - name: Build backup service
+        run: |
+          cd services/backup
+          docker build -t postgres-backup:test .
+
+      - name: Run backup service
+        run: |
+          cd tests
+          docker-compose -f docker-compose.test.yml up -d backup
+
+      - name: Wait for backup to complete
+        run: |
+          echo "Waiting for backup to complete (65s)..."
+          sleep 65
+
+      - name: Check backup logs
+        run: |
+          cd tests
+          docker-compose -f docker-compose.test.yml logs backup
+          if docker-compose -f docker-compose.test.yml logs backup | grep -q "Backup completed successfully"; then
+            echo "✓ Backup completed successfully"
+          else
+            echo "✗ Backup failed"
+            exit 1
+          fi
+
+      - name: Verify backup exists in MinIO
+        run: |
+          cd tests
+          docker-compose -f docker-compose.test.yml exec -T minio \
+            mc ls myminio/test-backups/test-backups/
+          if docker-compose -f docker-compose.test.yml exec -T minio \
+            mc ls myminio/test-backups/test-backups/ | grep -q "backup_"; then
+            echo "✓ Backup file found in MinIO"
+          else
+            echo "✗ Backup file not found in MinIO"
+            exit 1
+          fi
+
+      - name: Build verify service
+        run: |
+          cd services/verify
+          docker build -t postgres-verify:test .
+
+      - name: Run verify service
+        run: |
+          cd tests
+          docker-compose -f docker-compose.test.yml up -d verify
+
+      - name: Wait for verification to complete
+        run: |
+          echo "Waiting for verification to complete (125s)..."
+          sleep 125
+
+      - name: Check verification logs
+        run: |
+          cd tests
+          docker-compose -f docker-compose.test.yml logs verify
+          if docker-compose -f docker-compose.test.yml logs verify | grep -q "Restore verification completed successfully"; then
+            echo "✓ Restore verification passed"
+          else
+            echo "✗ Restore verification failed"
+            exit 1
+          fi
+
+      - name: Verify data integrity
+        run: |
+          cd tests
+          RECORD_COUNT=$(docker-compose -f docker-compose.test.yml exec -T postgres \
+            psql -U testuser -d testdb -t -c "SELECT COUNT(*) FROM test_table;")
+          RECORD_COUNT=$(echo $RECORD_COUNT | tr -d '[:space:]')
+          echo "Record count: $RECORD_COUNT"
+          if [ "$RECORD_COUNT" -eq 3 ]; then
+            echo "✓ Data integrity verified (3 records)"
+          else
+            echo "✗ Data integrity check failed (expected 3, got $RECORD_COUNT)"
+            exit 1
+          fi
+
+      - name: Run shell script tests
+        run: |
+          cd tests
+          chmod +x run-tests.sh
+          ./run-tests.sh
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          cd tests
+          echo "=== PostgreSQL logs ==="
+          docker-compose -f docker-compose.test.yml logs postgres
+          echo "=== MinIO logs ==="
+          docker-compose -f docker-compose.test.yml logs minio
+          echo "=== Backup service logs ==="
+          docker-compose -f docker-compose.test.yml logs backup
+          echo "=== Verify service logs ==="
+          docker-compose -f docker-compose.test.yml logs verify
+
+      - name: Clean up
+        if: always()
+        run: |
+          cd tests
+          docker-compose -f docker-compose.test.yml down -v
+
+  lint-shell:
+    name: Lint Shell Scripts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: './services'
+          severity: warning
+
+  lint-docker:
+    name: Lint Dockerfiles
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Lint Dockerfile (backup)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: services/backup/Dockerfile
+          failure-threshold: warning
+
+      - name: Lint Dockerfile (verify)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: services/verify/Dockerfile
+          failure-threshold: warning
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner (backup)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'services/backup'
+          format: 'sarif'
+          output: 'trivy-backup-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Run Trivy vulnerability scanner (verify)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'services/verify'
+          format: 'sarif'
+          output: 'trivy-verify-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: '.'
+
+  docs-check:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for broken links
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          use-quiet-mode: 'yes'
+          config-file: '.github/workflows/markdown-link-check-config.json'
+
+      - name: Verify documentation structure
+        run: |
+          # Check that all required docs exist
+          required_docs=(
+            "README.md"
+            "LICENSE"
+            "SECURITY.md"
+            "CONTRIBUTING.md"
+            "CHANGELOG.md"
+            "docs/architecture.md"
+            "docs/configuration.md"
+            "docs/restore.md"
+            "docs/troubleshooting.md"
+            "docs/runbooks.md"
+          )
+
+          for doc in "${required_docs[@]}"; do
+            if [ ! -f "$doc" ]; then
+              echo "ERROR: Missing required documentation: $doc"
+              exit 1
+            fi
+          done
+
+          echo "✓ All required documentation exists"
+
+  build-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backup service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/backup
+          push: false
+          tags: postgres-backup:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build verify service image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/verify
+          push: false
+          tags: postgres-verify:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [test, lint-shell, lint-docker, security-scan, docs-check, build-images]
+    if: always()
+
+    steps:
+      - name: Check test results
+        run: |
+          echo "=== Test Summary ==="
+          echo "Integration Tests: ${{ needs.test.result }}"
+          echo "Shell Lint: ${{ needs.lint-shell.result }}"
+          echo "Docker Lint: ${{ needs.lint-docker.result }}"
+          echo "Security Scan: ${{ needs.security-scan.result }}"
+          echo "Docs Check: ${{ needs.docs-check.result }}"
+          echo "Build Images: ${{ needs.build-images.result }}"
+
+          if [ "${{ needs.test.result }}" != "success" ] || \
+             [ "${{ needs.lint-shell.result }}" != "success" ] || \
+             [ "${{ needs.lint-docker.result }}" != "success" ] || \
+             [ "${{ needs.security-scan.result }}" != "success" ] || \
+             [ "${{ needs.docs-check.result }}" != "success" ] || \
+             [ "${{ needs.build-images.result }}" != "success" ]; then
+            echo "❌ Some tests failed"
+            exit 1
+          else
+            echo "✅ All tests passed"
+          fi

@@ -1,0 +1,33 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Test artifacts
+tests/data/
+tests/*.log
+
+# Docker
+*.tar
+.dockerignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Backup test data
+backups/
+restore-test/
+
+# MinIO data (local testing)
+minio-data/
