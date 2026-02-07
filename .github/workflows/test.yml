@@ -24,15 +24,25 @@ jobs:
       - name: Start test services
         run: |
           cd tests
-          docker-compose -f docker-compose.test.yml up -d postgres minio minio-setup
+          docker-compose -f docker-compose.test.yml up -d postgres postgres_verify minio minio-setup
 
       - name: Wait for services to be healthy
         run: |
           cd tests
-          echo "Waiting for PostgreSQL..."
+          echo "Waiting for PostgreSQL (source)..."
           for i in {1..30}; do
             if docker-compose -f docker-compose.test.yml exec -T postgres pg_isready -U testuser -d testdb; then
-              echo "PostgreSQL is ready"
+              echo "PostgreSQL (source) is ready"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
+
+          echo "Waiting for PostgreSQL (verify)..."
+          for i in {1..30}; do
+            if docker-compose -f docker-compose.test.yml exec -T postgres_verify pg_isready -U verifyuser -d postgres; then
+              echo "PostgreSQL (verify) is ready"
               break
             fi
             echo "Waiting... ($i/30)"
@@ -151,6 +161,11 @@ jobs:
           cd tests
           chmod +x run-tests.sh
           ./run-tests.sh
+
+      - name: Run make test
+        run: |
+          make test-clean
+          make test
 
       - name: Collect logs on failure
         if: failure()

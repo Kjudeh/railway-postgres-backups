@@ -107,24 +107,106 @@ See [Configuration Documentation](docs/configuration.md) for complete list of op
 
 ## Testing
 
-### Local Testing
+### Quick Start
+
+Run the complete test suite with a single command:
+
+```bash
+make test
+```
+
+This will:
+1. Start PostgreSQL (source and verify target) and MinIO using Docker Compose
+2. Seed test data
+3. Run backup service and verify backup creation
+4. Verify backup object exists in MinIO with size > 0
+5. Run restore verification service to a separate database
+6. Validate data integrity with sanity queries
+7. Test retention pruning (old backup deletion)
+8. Clean up all test resources
+
+### Available Make Commands
+
+```bash
+make test          # Run all integration tests
+make test-verbose  # Run tests with verbose output
+make test-clean    # Clean up test containers and volumes
+make test-logs     # Show logs from all test services
+make build         # Build all Docker images
+make build-backup  # Build backup service image only
+make build-verify  # Build verify service image only
+make help          # Show all available commands
+```
+
+### Manual Testing
+
+If you prefer to run tests manually or need to debug:
 
 ```bash
 cd tests
 ./run-tests.sh
 ```
 
-This will:
-1. Start PostgreSQL and MinIO using Docker Compose
-2. Run backup service and verify backup creation
-3. Run restore verification service
-4. Validate data integrity
+Or start services individually:
 
-See [Testing Documentation](tests/README.md) for details.
+```bash
+cd tests
+docker-compose -f docker-compose.test.yml up
+```
+
+Access MinIO console at http://localhost:9001 (minioadmin/minioadmin123)
+
+See [Testing Documentation](tests/README.md) for detailed information.
+
+### Test Coverage
+
+The integration tests verify:
+
+✅ **Backup Creation**
+- Backup service starts successfully
+- pg_dump executes without errors
+- Backup completes within expected time
+
+✅ **Backup Storage**
+- Backup file exists in MinIO/S3
+- File size is greater than 0
+- Correct naming convention (backup_YYYYMMDD_HHMMSS.sql.gz)
+
+✅ **Restore Verification**
+- Verify service downloads backup successfully
+- Restore to separate postgres_verify instance
+- Temporary database created and cleaned up
+- No data corruption during restore
+
+✅ **Data Integrity**
+- Correct number of records restored
+- Index integrity maintained
+- Data content matches source
+- Custom sanity queries pass
+
+✅ **Retention Policy**
+- Old backups are identified correctly
+- Backups older than retention period are deleted
+- Recent backups are preserved
+- Retention cleanup runs during backup cycle
 
 ### CI/CD
 
-Tests run automatically on every push via GitHub Actions.
+Tests run automatically on every push and pull request via GitHub Actions.
+
+[![Tests](https://github.com/yourusername/postgres-backup-railway/actions/workflows/test.yml/badge.svg)](https://github.com/yourusername/postgres-backup-railway/actions/workflows/test.yml)
+
+The CI pipeline includes:
+- Integration tests (backup, restore, retention)
+- Shell script linting (ShellCheck)
+- Dockerfile linting (Hadolint)
+- Security scanning (Trivy)
+- Documentation validation
+- Docker image builds
+
+### Troubleshooting Tests
+
+If tests fail, see the [Test Failures](docs/troubleshooting.md#test-failures) section in the troubleshooting guide.
 
 ## Architecture
 

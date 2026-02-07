@@ -716,6 +716,323 @@ railway variables delete VAR_NAME
    - Variable names are case-sensitive
    - `DATABASE_URL` not `database_url`
 
+## Test Failures
+
+### Integration Tests Failing Locally
+
+**Symptoms**:
+- `make test` fails
+- Tests timeout or hang
+- Services not starting properly
+
+**Diagnosis**:
+```bash
+# Check service status
+cd tests
+docker-compose -f docker-compose.test.yml ps
+
+# Check logs
+docker-compose -f docker-compose.test.yml logs
+
+# Check specific service
+docker-compose -f docker-compose.test.yml logs postgres
+docker-compose -f docker-compose.test.yml logs postgres_verify
+docker-compose -f docker-compose.test.yml logs minio
+docker-compose -f docker-compose.test.yml logs backup
+docker-compose -f docker-compose.test.yml logs verify
+```
+
+**Solutions**:
+
+1. **Port conflicts**
+   - Ports 5432, 5433, 9000, or 9001 already in use
+   - Stop conflicting services:
+   ```bash
+   # Find processes using ports
+   lsof -i :5432
+   lsof -i :5433
+   lsof -i :9000
+   lsof -i :9001
+
+   # Or change ports in tests/docker-compose.test.yml
+   ```
+
+2. **Docker resources insufficient**
+   - Tests require ~2GB RAM, ~5GB disk
+   - Increase Docker Desktop resources
+   - Clean up old containers/volumes:
+   ```bash
+   make test-clean
+   docker system prune -a
+   ```
+
+3. **Services not becoming healthy**
+   - Check Docker is running: `docker ps`
+   - Restart Docker Desktop
+   - Pull latest images:
+   ```bash
+   docker-compose -f tests/docker-compose.test.yml pull
+   ```
+
+4. **MinIO bucket creation fails**
+   - Check minio-setup logs:
+   ```bash
+   docker-compose -f tests/docker-compose.test.yml logs minio-setup
+   ```
+   - Manually create bucket:
+   ```bash
+   docker-compose -f tests/docker-compose.test.yml exec minio \
+     mc alias set myminio http://localhost:9000 minioadmin minioadmin123
+   docker-compose -f tests/docker-compose.test.yml exec minio \
+     mc mb myminio/test-backups
+   ```
+
+### Test: "Backup size is 0 or invalid"
+
+**Symptoms**:
+```
+✗ Backup file size is 0 or invalid
+```
+
+**Solutions**:
+
+1. **Backup service failed**
+   ```bash
+   docker-compose -f tests/docker-compose.test.yml logs backup
+   ```
+   - Check for database connection errors
+   - Check for S3 upload errors
+
+2. **Database is empty**
+   - Verify test data was seeded:
+   ```bash
+   docker-compose -f tests/docker-compose.test.yml exec postgres \
+     psql -U testuser -d testdb -c "SELECT * FROM test_table;"
+   ```
+
+3. **Timing issue**
+   - Backup not completed when test ran
+   - Increase sleep time in run-tests.sh (line 81)
+
+### Test: "Restore verification failed"
+
+**Symptoms**:
+```
+✗ Restore verification failed
+```
+
+**Solutions**:
+
+1. **Check verify service logs**
+   ```bash
+   docker-compose -f tests/docker-compose.test.yml logs verify
+   ```
+
+2. **postgres_verify not healthy**
+   ```bash
+   docker-compose -f tests/docker-compose.test.yml ps postgres_verify
+   ```
+   - Restart service:
+   ```bash
+   docker-compose -f tests/docker-compose.test.yml restart postgres_verify
+   ```
+
+3. **No backup to restore**
+   - Verify backup exists in MinIO:
+   ```bash
+   docker-compose -f tests/docker-compose.test.yml exec minio \
+     mc ls myminio/test-backups/test-backups/
+   ```
+
+4. **Permission issues**
+   - Verify user has CREATEDB permission:
+   ```bash
+   docker-compose -f tests/docker-compose.test.yml exec postgres_verify \
+     psql -U verifyuser -d postgres -c "SELECT rolcreatedb FROM pg_roles WHERE rolname = 'verifyuser';"
+   ```
+
+### Test: "Retention pruning test failed"
+
+**Symptoms**:
+- Old backups not deleted
+- Test times out
+
+**Solutions**:
+
+1. **Check backup service logs**
+   ```bash
+   docker-compose -f tests/docker-compose.test.yml logs backup
+   ```
+   - Look for deletion attempts
+   - Check for errors during cleanup
+
+2. **Date parsing issues**
+   - Test uses `date -d "2 days ago"` (GNU) or `date -v-2d` (BSD)
+   - May not work in all environments
+   - Check if old backup was created:
+   ```bash
+   docker-compose -f tests/docker-compose.test.yml exec minio \
+     mc ls myminio/test-backups/test-backups/
+   ```
+
+3. **Timing issues**
+   - Retention cleanup runs during backup cycle
+   - Increase wait time (line 209 in run-tests.sh)
+   - Or manually trigger another backup cycle
+
+### Test: "Data integrity check failed"
+
+**Symptoms**:
+```
+✗ Data integrity check failed (expected 3, got X)
+```
+
+**Solutions**:
+
+1. **Database not properly seeded**
+   - Check if seed data exists:
+   ```bash
+   docker-compose -f tests/docker-compose.test.yml exec postgres \
+     psql -U testuser -d testdb -c "SELECT COUNT(*) FROM test_table;"
+   ```
+   - Re-run seed step:
+   ```bash
+   # See run-tests.sh lines 56-70
+   ```
+
+2. **Connection to wrong database**
+   - Verify test is querying correct database
+   - Check DATABASE_URL in docker-compose.test.yml
+
+### GitHub Actions Tests Failing
+
+**Symptoms**:
+- Tests pass locally but fail in CI
+- GitHub Actions workflow fails
+
+**Solutions**:
+
+1. **Check workflow logs**
+   - Go to GitHub repository → Actions tab
+   - Click on failed workflow run
+   - Review step-by-step logs
+
+2. **Timing differences**
+   - CI may be slower than local
+   - Increase sleep/wait times in workflow
+   - See `.github/workflows/test.yml`
+
+3. **Resource constraints**
+   - GitHub Actions runners have limited resources
+   - Reduce concurrent tests
+   - Optimize service startup times
+
+4. **Docker version differences**
+   - Different Docker/Docker Compose versions
+   - Pin versions in workflow:
+   ```yaml
+   - uses: docker/setup-buildx-action@v3
+     with:
+       version: v0.11.0
+   ```
+
+5. **Secrets not configured**
+   - Not applicable for tests (uses MinIO)
+   - But verify if custom configurations are needed
+
+### Test Cleanup Issues
+
+**Symptoms**:
+- Tests leave containers running
+- Disk space filling up
+- Volumes not deleted
+
+**Solutions**:
+
+1. **Manual cleanup**
+   ```bash
+   make test-clean
+   ```
+
+2. **Force cleanup**
+   ```bash
+   cd tests
+   docker-compose -f docker-compose.test.yml down -v --remove-orphans
+   docker volume prune -f
+   ```
+
+3. **Clean everything**
+   ```bash
+   # WARNING: This removes ALL stopped containers and unused volumes
+   docker system prune -a --volumes -f
+   ```
+
+4. **Check disk space**
+   ```bash
+   docker system df
+   ```
+
+### Make Command Issues
+
+**Symptoms**:
+- `make: command not found`
+- `make test` doesn't work
+
+**Solutions**:
+
+1. **Install make**
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get install make
+
+   # macOS (usually pre-installed)
+   xcode-select --install
+
+   # Windows (Git Bash)
+   # Make should be included with Git for Windows
+   # Or use WSL
+   ```
+
+2. **Run tests directly**
+   ```bash
+   cd tests
+   bash run-tests.sh
+   ```
+
+3. **Windows-specific**
+   - Use Git Bash or WSL
+   - Or run PowerShell equivalent:
+   ```powershell
+   cd tests
+   bash run-tests.sh
+   ```
+
+### Test Performance Issues
+
+**Symptoms**:
+- Tests take very long (>10 minutes)
+- High CPU/memory usage
+
+**Solutions**:
+
+1. **Reduce backup interval**
+   - Already set to 60s in docker-compose.test.yml
+   - Don't reduce further or backups won't complete
+
+2. **Reduce compression level**
+   - Edit docker-compose.test.yml:
+   ```yaml
+   COMPRESSION_LEVEL: 1  # Faster, less CPU
+   ```
+
+3. **Allocate more resources to Docker**
+   - Docker Desktop → Preferences → Resources
+   - Increase CPU and RAM allocation
+
+4. **Close other applications**
+   - Free up system resources
+   - Stop other Docker containers
+
 ## Getting More Help
 
 If issues persist:

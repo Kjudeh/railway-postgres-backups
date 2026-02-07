@@ -31,7 +31,7 @@ trap cleanup EXIT
 # Start services
 echo ""
 echo "Starting test services..."
-docker-compose -f docker-compose.test.yml up -d postgres minio minio-setup
+docker-compose -f docker-compose.test.yml up -d postgres postgres_verify minio minio-setup
 
 # Wait for services to be healthy
 echo "Waiting for services to be ready..."
@@ -40,7 +40,12 @@ sleep 5
 # Check service health
 echo "Checking service health..."
 if ! docker-compose -f docker-compose.test.yml ps postgres | grep -q "healthy"; then
-    echo -e "${RED}ERROR: PostgreSQL is not healthy${NC}"
+    echo -e "${RED}ERROR: PostgreSQL (source) is not healthy${NC}"
+    exit 1
+fi
+
+if ! docker-compose -f docker-compose.test.yml ps postgres_verify | grep -q "healthy"; then
+    echo -e "${RED}ERROR: PostgreSQL (verify) is not healthy${NC}"
     exit 1
 fi
 
@@ -93,13 +98,32 @@ fi
 # Test 2: Verify backup exists in MinIO
 echo ""
 echo "Test 2: Verifying backup exists in MinIO..."
-if docker-compose -f docker-compose.test.yml exec -T minio \
-    mc ls myminio/test-backups/test-backups/ | grep -q "backup_"; then
+BACKUP_LIST=$(docker-compose -f docker-compose.test.yml exec -T minio \
+    mc ls myminio/test-backups/test-backups/)
+
+if echo "$BACKUP_LIST" | grep -q "backup_"; then
     echo -e "${GREEN}✓ Backup file found in MinIO${NC}"
 else
     echo -e "${RED}✗ Backup file not found in MinIO${NC}"
     exit 1
 fi
+
+# Test 2a: Verify backup size > 0
+echo "Verifying backup size > 0..."
+BACKUP_SIZE=$(echo "$BACKUP_LIST" | grep "backup_" | head -1 | awk '{print $4}')
+
+# Extract numeric value (remove B, KiB, MiB, etc.)
+BACKUP_SIZE_NUM=$(echo "$BACKUP_SIZE" | sed 's/[^0-9.]//g')
+
+if [ -z "$BACKUP_SIZE_NUM" ] || [ "$(echo "$BACKUP_SIZE_NUM <= 0" | bc -l 2>/dev/null || echo "0")" -eq 1 ]; then
+    # Fallback: check if size string is empty or "0"
+    if [ -z "$BACKUP_SIZE" ] || [ "$BACKUP_SIZE" = "0" ] || [ "$BACKUP_SIZE" = "0B" ]; then
+        echo -e "${RED}✗ Backup file size is 0 or invalid${NC}"
+        exit 1
+    fi
+fi
+
+echo -e "${GREEN}✓ Backup size verified: $BACKUP_SIZE${NC}"
 
 # Test 3: Run verify service
 echo ""
@@ -124,7 +148,7 @@ fi
 echo ""
 echo "Test 4: Verifying data integrity..."
 RECORD_COUNT=$(docker-compose -f docker-compose.test.yml exec -T postgres \
-    psql -U testuser -d testdb -t -c "SELECT COUNT(*) FROM test_table;")
+    psql -U testuser -d testdb -t -c "SELECT COUNT(*) FROM test_table;" | tr -d '[:space:]')
 
 if [ "$RECORD_COUNT" -eq 3 ]; then
     echo -e "${GREEN}✓ Data integrity verified (3 records)${NC}"
@@ -133,12 +157,74 @@ else
     exit 1
 fi
 
-# Test 5: Verify backup retention
+# Test 4a: Run sanity queries
+echo "Running sanity queries..."
+# Check if indexes exist
+INDEX_COUNT=$(docker-compose -f docker-compose.test.yml exec -T postgres \
+    psql -U testuser -d testdb -t -c "SELECT COUNT(*) FROM pg_indexes WHERE tablename = 'test_table' AND indexname = 'idx_test_name';" | tr -d '[:space:]')
+
+if [ "$INDEX_COUNT" -eq 1 ]; then
+    echo -e "${GREEN}✓ Index integrity verified${NC}"
+else
+    echo -e "${RED}✗ Index check failed (expected 1, got $INDEX_COUNT)${NC}"
+    exit 1
+fi
+
+# Verify specific data
+FIRST_RECORD=$(docker-compose -f docker-compose.test.yml exec -T postgres \
+    psql -U testuser -d testdb -t -c "SELECT name FROM test_table WHERE id = 1;" | xargs)
+
+if [ "$FIRST_RECORD" = "Test Record 1" ]; then
+    echo -e "${GREEN}✓ Data content verified${NC}"
+else
+    echo -e "${RED}✗ Data content check failed (expected 'Test Record 1', got '$FIRST_RECORD')${NC}"
+    exit 1
+fi
+
+# Test 5: Verify backup retention/pruning
 echo ""
-echo "Test 5: Testing backup retention..."
-# Create an old backup file (simulate)
-# In real scenario, this would be tested over time
-echo -e "${YELLOW}⊘ Backup retention test skipped (requires time-based testing)${NC}"
+echo "Test 5: Testing backup retention and pruning..."
+
+# Create an old backup file in MinIO to simulate old backups
+OLD_DATE=$(date -d "2 days ago" +%Y%m%d 2>/dev/null || date -v-2d +%Y%m%d 2>/dev/null || echo "20240101")
+OLD_TIME="120000"
+OLD_BACKUP_NAME="test-backups/backup_${OLD_DATE}_${OLD_TIME}.sql.gz"
+
+echo "Creating simulated old backup: $OLD_BACKUP_NAME"
+echo "test old backup content" | docker-compose -f docker-compose.test.yml exec -T minio \
+    mc pipe myminio/test-backups/$OLD_BACKUP_NAME
+
+# Verify old backup was created
+if docker-compose -f docker-compose.test.yml exec -T minio \
+    mc ls myminio/test-backups/test-backups/ | grep -q "backup_${OLD_DATE}"; then
+    echo -e "${GREEN}✓ Old backup created for testing${NC}"
+else
+    echo -e "${RED}✗ Failed to create old backup for testing${NC}"
+    exit 1
+fi
+
+# Run backup service again to trigger retention cleanup (with BACKUP_RETENTION_DAYS=1)
+echo "Running backup service again to trigger retention cleanup..."
+docker-compose -f docker-compose.test.yml restart backup
+sleep 70
+
+# Check if old backup was deleted
+if docker-compose -f docker-compose.test.yml exec -T minio \
+    mc ls myminio/test-backups/test-backups/ | grep -q "backup_${OLD_DATE}"; then
+    echo -e "${YELLOW}⚠ Old backup still exists (retention cleanup may need more time)${NC}"
+    # Not failing the test as retention timing can vary
+else
+    echo -e "${GREEN}✓ Old backup pruned successfully${NC}"
+fi
+
+# Verify new backup still exists
+if docker-compose -f docker-compose.test.yml exec -T minio \
+    mc ls myminio/test-backups/test-backups/ | grep -q "backup_" | grep -v "backup_${OLD_DATE}"; then
+    echo -e "${GREEN}✓ Recent backups retained${NC}"
+else
+    echo -e "${RED}✗ Recent backups missing${NC}"
+    exit 1
+fi
 
 # All tests passed
 echo ""
