@@ -93,8 +93,7 @@ Enhancement suggestions are welcome! Please include:
 
 2. **Run tests**
    ```bash
-   cd tests
-   ./run-tests.sh
+   make test
    ```
 
 3. **Make changes**
@@ -104,13 +103,24 @@ Enhancement suggestions are welcome! Please include:
 
 4. **Test your changes**
    ```bash
-   cd tests
-   ./run-tests.sh
+   make test
    ```
 
 ## Testing
 
 ### Running Tests
+
+```bash
+make test
+```
+
+Or for verbose output:
+
+```bash
+make test-verbose
+```
+
+Or directly:
 
 ```bash
 cd tests

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Comprehensive automated operability tests with `make test` command
+- Separate postgres_verify instance for isolated restore testing
+- Enhanced test assertions: backup size > 0, sanity queries, retention pruning
+- Makefile with single-command testing and build targets
+- Test troubleshooting documentation section
+- GitHub Actions CI integration for both source and verify databases
+
+### Changed
+- README.md restructured as professional landing page
+- Enhanced test coverage documentation with detailed test scenarios
+- Improved environment variable tables with clear required/optional indicators
+
 ## [1.0.0] - 2024-02-07
 
 ### Added

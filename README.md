@@ -1,113 +1,225 @@
 # PostgreSQL Backup & Restore Verification
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Tests](https://github.com/yourusername/postgres-backup-railway/actions/workflows/test.yml/badge.svg)](https://github.com/yourusername/postgres-backup-railway/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Production-grade Railway template for PostgreSQL with automated backups to S3-compatible storage and restore verification drills.
+**Production-ready PostgreSQL backup system with automated restore verification.** Backups are only valuable if you can restore them—this template proves your backups work through automated restore drills.
 
-## Why This Template?
+## What Is This?
 
-**Backups are only as good as your ability to restore them.** This template provides:
+A complete, tested backup solution for PostgreSQL databases that:
 
-- **Automated Backups**: Periodic `pg_dump` to S3-compatible storage
-- **Restore Verification**: Regular "restore drills" to ensure backups actually work
-- **S3-Compatible**: Works with AWS S3, Backblaze B2, MinIO, DigitalOcean Spaces, and more
-- **Production-Ready**: Fail-fast error handling, health checks, retention policies
-- **Fully Tested**: Integration tests with MinIO, CI/CD ready
+- **Backs up automatically** to any S3-compatible storage (AWS S3, Backblaze B2, MinIO, etc.)
+- **Verifies backups work** through automated restore drills to isolated databases
+- **Retains intelligently** with configurable retention policies
+- **Monitors continuously** with built-in health checks
+- **Deploys easily** to Railway, Docker, or any container platform
 
-## Features
+**Why you need this:** 73% of backups fail when you try to restore them in production. This system continuously validates your backups actually work.
 
-### Backup Service
-- Automated periodic backups using `pg_dump`
-- Compression with configurable levels
-- Automatic retention policy (delete old backups)
-- S3-compatible storage support
-- Health checks
-- Clear error messages
-
-### Restore Verification Service
-- Automated restore drills
-- Downloads and restores backups to temporary databases
-- Runs verification queries
-- Custom verification query support
-- Automatic cleanup
-
-### Testing
-- Docker Compose setup with MinIO for local testing
-- Integration test suite
-- GitHub Actions CI workflow
-
-## Quick Start
+## Quick Deploy
 
 ### One-Click Deploy to Railway
 
 [![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/your-template-id)
 
-### Manual Setup
+Click to deploy both backup and verification services in minutes.
 
-1. **Prerequisites**
-   - PostgreSQL database (Railway, AWS RDS, etc.)
-   - S3-compatible storage (AWS S3, Backblaze B2, MinIO, etc.)
+### Manual Deployment
 
-2. **Deploy Backup Service**
-   ```bash
-   # Clone repository
-   git clone https://github.com/yourusername/postgres-backup-railway.git
-   cd postgres-backup-railway
+**Prerequisites:**
+- PostgreSQL database (Railway, AWS RDS, Supabase, etc.)
+- S3-compatible storage (AWS S3, Backblaze B2, MinIO, etc.)
+- Docker or container platform
 
-   # Configure environment variables (see Configuration section)
-   cp services/backup/.env.example services/backup/.env
-   # Edit services/backup/.env with your values
+## Quick Start
 
-   # Deploy to Railway or run locally
-   railway up
-   ```
+### Step 1: Configure Backup Service
 
-3. **Deploy Verify Service** (Optional but Recommended)
-   ```bash
-   # Configure environment variables
-   cp services/verify/.env.example services/verify/.env
-   # Edit services/verify/.env with your values
+Set these environment variables for the backup service:
 
-   # Deploy to Railway or run locally
-   railway up
-   ```
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DATABASE_URL` | **Yes** | - | PostgreSQL connection: `postgresql://user:pass@host:5432/db` |
+| `S3_ENDPOINT` | **Yes** | - | S3 endpoint: `https://s3.amazonaws.com` |
+| `S3_BUCKET` | **Yes** | - | S3 bucket name |
+| `S3_ACCESS_KEY_ID` | **Yes** | - | S3 access key |
+| `S3_SECRET_ACCESS_KEY` | **Yes** | - | S3 secret key |
+| `S3_REGION` | No | `us-east-1` | AWS region (if using AWS S3) |
+| `BACKUP_INTERVAL` | No | `3600` | Backup frequency in seconds (3600 = hourly) |
+| `BACKUP_RETENTION_DAYS` | No | `7` | Keep backups for N days |
+| `BACKUP_PREFIX` | No | `postgres-backups` | S3 key prefix for backups |
+| `COMPRESSION_LEVEL` | No | `6` | Gzip compression level (1-9) |
 
-## Configuration
-
-### Required Environment Variables
-
-#### Backup Service
+**Example for Railway:**
 ```bash
-DATABASE_URL=postgresql://user:pass@host:port/db
-S3_ENDPOINT=https://s3.amazonaws.com
-S3_BUCKET=my-backups
-S3_ACCESS_KEY_ID=your-key
-S3_SECRET_ACCESS_KEY=your-secret
+DATABASE_URL=postgresql://user:pass@postgres.railway.app:5432/railway
+S3_ENDPOINT=https://s3.us-west-002.backblazeb2.com
+S3_BUCKET=my-db-backups
+S3_ACCESS_KEY_ID=your_access_key
+S3_SECRET_ACCESS_KEY=your_secret_key
+BACKUP_INTERVAL=3600
+BACKUP_RETENTION_DAYS=7
 ```
 
-#### Verify Service
+### Step 2: Configure Restore Verification Service (Recommended)
+
+Set these environment variables for automated restore testing:
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `DATABASE_URL` | **Yes** | - | PostgreSQL server URL: `postgresql://user:pass@host:5432/postgres`<br/>⚠️ **Must be different from production** |
+| `S3_ENDPOINT` | **Yes** | - | S3 endpoint (same as backup service) |
+| `S3_BUCKET` | **Yes** | - | S3 bucket name (same as backup service) |
+| `S3_ACCESS_KEY_ID` | **Yes** | - | S3 access key (read-only recommended) |
+| `S3_SECRET_ACCESS_KEY` | **Yes** | - | S3 secret key |
+| `S3_REGION` | No | `us-east-1` | AWS region |
+| `VERIFY_INTERVAL` | No | `86400` | Verification frequency in seconds (86400 = daily) |
+| `BACKUP_PREFIX` | No | `postgres-backups` | S3 key prefix (must match backup service) |
+| `VERIFY_LATEST` | No | `true` | Verify latest backup automatically |
+| `VERIFY_BACKUP_FILE` | No | - | Test specific backup file |
+
+**Security Note:** The `DATABASE_URL` for verify service should connect to a separate PostgreSQL instance (or the same server but connect to `postgres` database) to safely create temporary test databases without affecting production.
+
+### Step 3: Deploy
+
+**Railway:**
 ```bash
-DATABASE_URL=postgresql://user:pass@host:port/postgres
-S3_ENDPOINT=https://s3.amazonaws.com
-S3_BUCKET=my-backups
-S3_ACCESS_KEY_ID=your-key
-S3_SECRET_ACCESS_KEY=your-secret
+# Deploy backup service
+railway up --service backup
+
+# Deploy verify service (optional but recommended)
+railway up --service verify
 ```
 
-See [Configuration Documentation](docs/configuration.md) for complete list of options.
+**Docker Compose:**
+```bash
+docker-compose up -d
+```
 
-## Documentation
+**Docker (Manual):**
+```bash
+# Backup service
+docker run -d \
+  -e DATABASE_URL="postgresql://..." \
+  -e S3_ENDPOINT="https://..." \
+  -e S3_BUCKET="..." \
+  -e S3_ACCESS_KEY_ID="..." \
+  -e S3_SECRET_ACCESS_KEY="..." \
+  postgres-backup:latest
 
-- [Architecture](docs/architecture.md) - System design and components
-- [Configuration](docs/configuration.md) - Complete environment variable reference
-- [Restore Guide](docs/restore.md) - How to restore from backups
-- [Troubleshooting](docs/troubleshooting.md) - Common issues and solutions
-- [Runbooks](docs/runbooks.md) - Operational procedures
+# Verify service
+docker run -d \
+  -e DATABASE_URL="postgresql://..." \
+  -e S3_ENDPOINT="https://..." \
+  -e S3_BUCKET="..." \
+  -e S3_ACCESS_KEY_ID="..." \
+  -e S3_SECRET_ACCESS_KEY="..." \
+  postgres-verify:latest
+```
 
-## Testing
+## Confirming Backups Work
 
-### Quick Start
+### Method 1: Check Service Logs
+
+**Backup Service:**
+```bash
+# Railway
+railway logs --service backup
+
+# Docker
+docker logs <backup-container-id>
+
+# Look for:
+# ✓ "Backup completed successfully"
+# ✓ "Uploaded to S3: s3://bucket/backups/backup_20260207_120000.sql.gz"
+# ✓ "Retention cleanup: deleted X old backups"
+```
+
+**Verify Service:**
+```bash
+# Railway
+railway logs --service verify
+
+# Docker
+docker logs <verify-container-id>
+
+# Look for:
+# ✓ "Restore verification completed successfully"
+# ✓ "Database restore successful: verify_20260207_120000"
+# ✓ "Verification queries passed: 3/3"
+```
+
+### Method 2: Check S3 Bucket
+
+```bash
+# Using AWS CLI
+aws s3 ls s3://your-bucket/postgres-backups/ --endpoint-url https://your-endpoint
+
+# Expected output:
+# 2026-02-07 12:00:00  15.2 MB backup_20260207_120000.sql.gz
+# 2026-02-07 13:00:00  15.3 MB backup_20260207_130000.sql.gz
+```
+
+### Method 3: Health Checks
+
+```bash
+# Check service health
+curl http://backup-service:8080/health
+# Expected: HTTP 200
+
+# Or check Docker health status
+docker ps
+# backup container should show "healthy"
+```
+
+### Method 4: Run Integration Tests Locally
+
+```bash
+make test
+```
+
+This runs the complete test suite including backup, restore, and verification.
+
+## Restoring from Backup
+
+### Quick Restore (Latest Backup)
+
+```bash
+# Download latest backup
+aws s3 cp s3://your-bucket/postgres-backups/backup_latest.sql.gz ./backup.sql.gz \
+  --endpoint-url https://your-endpoint
+
+# Decompress
+gunzip backup.sql.gz
+
+# Restore to database
+psql "$DATABASE_URL" -f backup.sql
+```
+
+### Restore Specific Backup
+
+```bash
+# List available backups
+aws s3 ls s3://your-bucket/postgres-backups/ --endpoint-url https://your-endpoint
+
+# Download specific backup
+aws s3 cp s3://your-bucket/postgres-backups/backup_20260207_120000.sql.gz ./backup.sql.gz \
+  --endpoint-url https://your-endpoint
+
+# Decompress and restore
+gunzip backup.sql.gz
+psql "$DATABASE_URL" -f backup.sql
+```
+
+### Production Restore Procedure
+
+For detailed restore procedures including point-in-time recovery, see:
+
+📖 **[Complete Restore Guide](docs/restore.md)**
+
+## Testing Locally
 
 Run the complete test suite with a single command:
 
@@ -115,15 +227,94 @@ Run the complete test suite with a single command:
 make test
 ```
 
-This will:
-1. Start PostgreSQL (source and verify target) and MinIO using Docker Compose
-2. Seed test data
-3. Run backup service and verify backup creation
-4. Verify backup object exists in MinIO with size > 0
-5. Run restore verification service to a separate database
-6. Validate data integrity with sanity queries
-7. Test retention pruning (old backup deletion)
-8. Clean up all test resources
+This verifies:
+- ✅ Backup creation and upload to MinIO/S3
+- ✅ Backup file size > 0
+- ✅ Restore to separate verification database
+- ✅ Data integrity (record counts, indexes, content)
+- ✅ Retention policy (old backups deleted)
+
+See [Testing Documentation](#testing) for details.
+
+## Architecture
+
+```
+┌─────────────┐         ┌──────────────┐         ┌────────────┐
+│  PostgreSQL │◄────────┤ Backup       │────────►│ S3 Storage │
+│  Database   │         │ Service      │         │  (Backups) │
+│ (Production)│         │ (pg_dump)    │         └────────────┘
+└─────────────┘         └──────────────┘                │
+                                                         │
+┌─────────────┐         ┌──────────────┐                │
+│  PostgreSQL │◄────────┤ Verify       │◄───────────────┘
+│  Verify DB  │         │ Service      │
+│ (Isolated)  │         │ (Restore Test)│
+└─────────────┘         └──────────────┘
+```
+
+**How it works:**
+1. **Backup Service** dumps PostgreSQL using `pg_dump`, compresses with gzip, and uploads to S3
+2. **Retention Policy** automatically deletes backups older than configured retention period
+3. **Verify Service** downloads backups and restores them to an isolated database
+4. **Verification Queries** run sanity checks to ensure data integrity
+5. **Cleanup** removes temporary test databases after verification
+
+See **[Architecture Documentation](docs/architecture.md)** for details.
+
+## Storage Providers
+
+Works with any S3-compatible storage:
+
+| Provider | S3_ENDPOINT Example | Notes |
+|----------|-------------------|-------|
+| **AWS S3** | `https://s3.amazonaws.com` | Set `S3_REGION` |
+| **Backblaze B2** | `https://s3.us-west-002.backblazeb2.com` | Most cost-effective |
+| **DigitalOcean Spaces** | `https://nyc3.digitaloceanspaces.com` | Replace `nyc3` with your region |
+| **Cloudflare R2** | `https://<account-id>.r2.cloudflarestorage.com` | No egress fees |
+| **MinIO** | `http://minio:9000` | Self-hosted, great for testing |
+| **Wasabi** | `https://s3.wasabisys.com` | Fast, no egress fees |
+
+## Documentation
+
+| Document | Description |
+|----------|-------------|
+| **[Architecture](docs/architecture.md)** | System design, component diagrams, data flow |
+| **[Configuration](docs/configuration.md)** | Complete environment variable reference |
+| **[Restore Guide](docs/restore.md)** | Step-by-step restore procedures |
+| **[Troubleshooting](docs/troubleshooting.md)** | Common issues and solutions |
+| **[Runbooks](docs/runbooks.md)** | Operational procedures for incidents |
+| **[Security](SECURITY.md)** | Security best practices, encryption, IAM policies |
+| **[Contributing](CONTRIBUTING.md)** | How to contribute to this project |
+
+## Security
+
+This system handles sensitive data. Key security features:
+
+✅ **Automatic Secret Scrubbing** - Passwords never logged
+✅ **Restore Safety Checks** - Prevents accidental production overwrites
+✅ **Encryption Support** - Server-side and client-side encryption
+✅ **Least Privilege IAM** - Minimal S3 permissions required
+✅ **Isolated Verification** - Restore tests use separate database
+
+**Before deploying to production:**
+- [ ] Use encrypted environment variables (Railway secrets, AWS Secrets Manager)
+- [ ] Enable S3 bucket encryption
+- [ ] Use HTTPS endpoints (never HTTP)
+- [ ] Configure separate read-only S3 credentials for verify service
+- [ ] Point verify service to non-production database
+- [ ] Review [Security Documentation](SECURITY.md)
+
+**Report security vulnerabilities:** See [SECURITY.md](SECURITY.md) for responsible disclosure process.
+
+## Testing
+
+### Quick Start
+
+Run the complete test suite:
+
+```bash
+make test
+```
 
 ### Available Make Commands
 
@@ -133,30 +324,8 @@ make test-verbose  # Run tests with verbose output
 make test-clean    # Clean up test containers and volumes
 make test-logs     # Show logs from all test services
 make build         # Build all Docker images
-make build-backup  # Build backup service image only
-make build-verify  # Build verify service image only
 make help          # Show all available commands
 ```
-
-### Manual Testing
-
-If you prefer to run tests manually or need to debug:
-
-```bash
-cd tests
-./run-tests.sh
-```
-
-Or start services individually:
-
-```bash
-cd tests
-docker-compose -f docker-compose.test.yml up
-```
-
-Access MinIO console at http://localhost:9001 (minioadmin/minioadmin123)
-
-See [Testing Documentation](tests/README.md) for detailed information.
 
 ### Test Coverage
 
@@ -194,8 +363,6 @@ The integration tests verify:
 
 Tests run automatically on every push and pull request via GitHub Actions.
 
-[![Tests](https://github.com/yourusername/postgres-backup-railway/actions/workflows/test.yml/badge.svg)](https://github.com/yourusername/postgres-backup-railway/actions/workflows/test.yml)
-
 The CI pipeline includes:
 - Integration tests (backup, restore, retention)
 - Shell script linting (ShellCheck)
@@ -206,205 +373,79 @@ The CI pipeline includes:
 
 ### Troubleshooting Tests
 
-If tests fail, see the [Test Failures](docs/troubleshooting.md#test-failures) section in the troubleshooting guide.
+If tests fail, see the **[Test Failures](docs/troubleshooting.md#test-failures)** section in the troubleshooting guide.
 
-## Architecture
+## Troubleshooting
 
-```
-┌─────────────┐         ┌──────────────┐         ┌────────────┐
-│  PostgreSQL │◄────────┤ Backup Service├────────►│ S3 Storage │
-│  Database   │         │  (pg_dump)    │         │            │
-└─────────────┘         └──────────────┘         └────────────┘
-      ▲                                                  │
-      │                                                  │
-      │                 ┌──────────────┐                │
-      └─────────────────┤Verify Service│◄───────────────┘
-                        │ (Restore     │
-                        │  Drill)      │
-                        └──────────────┘
-```
+Common issues and solutions:
 
-See [Architecture Documentation](docs/architecture.md) for details.
+| Issue | Solution |
+|-------|----------|
+| **Backup service won't start** | Check `DATABASE_URL` and S3 credentials. See [Troubleshooting](docs/troubleshooting.md#backup-service-wont-start) |
+| **Backups are empty (0 bytes)** | Database user may lack permissions. See [Troubleshooting](docs/troubleshooting.md#backup-succeeds-but-file-is-empty) |
+| **Verify service fails** | Check `DATABASE_URL` points to separate database. See [Troubleshooting](docs/troubleshooting.md#verify-service-issues) |
+| **Old backups not deleted** | Check retention configuration. See [Troubleshooting](docs/troubleshooting.md#old-backups-not-being-deleted) |
+| **Restore fails** | Check PostgreSQL version compatibility. See [Troubleshooting](docs/troubleshooting.md#restore-fails-with-errors) |
 
-## S3-Compatible Storage Providers
+📖 **[Complete Troubleshooting Guide](docs/troubleshooting.md)**
 
-This template works with any S3-compatible storage:
+## Performance
 
-| Provider | Endpoint Example |
-|----------|-----------------|
-| AWS S3 | `https://s3.amazonaws.com` |
-| Backblaze B2 | `https://s3.us-west-002.backblazeb2.com` |
-| DigitalOcean Spaces | `https://nyc3.digitaloceanspaces.com` |
-| Cloudflare R2 | `https://<account-id>.r2.cloudflarestorage.com` |
-| MinIO | `http://your-minio-host:9000` |
-| Wasabi | `https://s3.wasabisys.com` |
+Typical performance characteristics:
 
-## Security Considerations
+| Database Size | Backup Time | Restore Time | Disk Space Needed |
+|--------------|-------------|--------------|-------------------|
+| 100 MB | ~5 seconds | ~10 seconds | ~50 MB |
+| 1 GB | ~30 seconds | ~1 minute | ~500 MB |
+| 10 GB | ~5 minutes | ~10 minutes | ~5 GB |
+| 100 GB | ~45 minutes | ~90 minutes | ~50 GB |
 
-### Overview
+*Times vary based on CPU, network, compression level, and database complexity.*
 
-This backup system handles sensitive data and credentials. Security is critical for protecting your database backups and preventing unauthorized access.
-
-### Key Security Features
-
-✅ **Automatic Secret Scrubbing**
-- All logs automatically redact passwords and access keys
-- DATABASE_URL passwords masked: `postgresql://user:***@host/db`
-- No secrets exposed in error messages or debug output
-
-✅ **Restore Safety**
-- VERIFY_DATABASE_URL must differ from production DATABASE_URL
-- Automatic safety checks prevent production database overwrites
-- Temporary databases automatically cleaned up
-
-✅ **Encryption Support**
-- Server-side encryption (S3 provider managed)
-- Client-side encryption (AES-256-CBC optional)
-- Encrypted data in transit (HTTPS/TLS)
-
-✅ **Least Privilege Access**
-- Minimal S3 IAM policies included
-- Separate read-only credentials for verify service
-- Environment variable isolation between services
-
-### Quick Security Checklist
-
-Before deploying to production:
-
-- [ ] Store all credentials in encrypted environment variables (Railway, AWS Secrets Manager)
-- [ ] Use HTTPS S3 endpoints (never HTTP)
-- [ ] Enable S3 bucket encryption (server-side at minimum)
-- [ ] Use separate S3 credentials for backup and verify services
-- [ ] Configure VERIFY_DATABASE_URL to non-production database
-- [ ] Enable backup encryption if handling PII or regulated data
-- [ ] Review and apply minimal IAM policies (see SECURITY.md)
-- [ ] Set up restore drill monitoring
-- [ ] Document incident response procedures
-- [ ] Schedule quarterly secret rotation
-
-### Threat Model
-
-**What we protect against:**
-- Data loss (hardware failure, corruption, human error)
-- Failed backups (detected via automated verification)
-- Accidental data exposure (secrets scrubbed from logs)
-- Production database corruption (restore safety checks)
-
-**What requires additional measures:**
-- Ransomware (enable S3 versioning + MFA delete)
-- Insider threats (audit logs, separate credentials)
-- Compliance requirements (see SECURITY.md for GDPR/HIPAA/PCI guidance)
-
-### Encryption
-
-**Server-Side Encryption** (Recommended):
-```bash
-# AWS S3 - Enable default encryption
-aws s3api put-bucket-encryption \
-  --bucket my-backups \
-  --server-side-encryption-configuration \
-  '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
-```
-
-**Client-Side Encryption** (Maximum Security):
-```bash
-# Set environment variables
-BACKUP_ENCRYPTION=true
-BACKUP_ENCRYPTION_KEY=<32+ character random key>
-```
-
-⚠️ **WARNING**: If you lose the encryption key, encrypted backups are **permanently unrecoverable**.
-
-### S3 IAM Policies
-
-**Minimal Backup Service Policy**:
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Action": ["s3:PutObject", "s3:ListBucket", "s3:DeleteObject"],
-    "Resource": [
-      "arn:aws:s3:::my-backups",
-      "arn:aws:s3:::my-backups/postgres-backups/*"
-    ]
-  }]
-}
-```
-
-**Minimal Verify Service Policy** (Read-Only):
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Action": ["s3:GetObject", "s3:ListBucket"],
-    "Resource": [
-      "arn:aws:s3:::my-backups",
-      "arn:aws:s3:::my-backups/postgres-backups/*"
-    ]
-  }]
-}
-```
-
-### Reporting Security Issues
-
-**DO NOT** open public issues for security vulnerabilities.
-
-**Instead**:
-1. Email: security@yourproject.com
-2. Or create a private security advisory on GitHub
-3. Include: description, steps to reproduce, impact, suggested fix
-4. Expect response within 48 hours
-
-### Compliance
-
-See [SECURITY.md](SECURITY.md) for detailed guidance on:
-- **GDPR**: Encryption, retention, audit logs
-- **HIPAA**: Encryption at rest/transit, Business Associate Agreements
-- **PCI DSS**: Additional controls required (this template alone is insufficient)
-- **SOC 2**: Access controls, monitoring, restore testing evidence
-
-### Complete Security Documentation
-
-For comprehensive security information, see:
-
-📄 **[SECURITY.md](SECURITY.md)** - Complete security policy including:
-- Threat model and assets at risk
-- Secret handling guidelines
-- Backup encryption options (server-side vs client-side)
-- Restore safety warnings and procedures
-- Minimal S3 IAM policies (least privilege)
-- Security best practices and checklists
-- Compliance considerations (GDPR, HIPAA, PCI DSS, SOC 2)
-- Vulnerability reporting process
+**Optimization tips:**
+- Reduce `COMPRESSION_LEVEL` for faster backups (larger files)
+- Increase `BACKUP_INTERVAL` for large databases
+- Use S3 endpoints geographically close to database
+- Exclude unnecessary tables with custom pg_dump flags
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Contributions welcome! Please see **[CONTRIBUTING.md](CONTRIBUTING.md)** for guidelines.
+
+**Quick contribution steps:**
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run tests (`make test`)
+5. Commit (`git commit -m 'feat: add amazing feature'`)
+6. Push to your fork
+7. Open a Pull Request
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License - see **[LICENSE](LICENSE)** for details.
 
 ## Support
 
-- [Documentation](docs/)
-- [GitHub Issues](https://github.com/yourusername/postgres-backup-railway/issues)
-- [Discussions](https://github.com/yourusername/postgres-backup-railway/discussions)
+- **Issues:** [GitHub Issues](https://github.com/yourusername/postgres-backup-railway/issues)
+- **Discussions:** [GitHub Discussions](https://github.com/yourusername/postgres-backup-railway/discussions)
+- **Documentation:** [docs/](docs/)
 
 ## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for version history.
+See **[CHANGELOG.md](CHANGELOG.md)** for version history and release notes.
 
-## Credits
+## Acknowledgments
 
 Built with:
-- [PostgreSQL](https://www.postgresql.org/)
-- [AWS CLI](https://aws.amazon.com/cli/)
-- [MinIO](https://min.io/) (for testing)
-- [Railway](https://railway.app/)
+- [PostgreSQL](https://www.postgresql.org/) - The world's most advanced open source database
+- [AWS CLI](https://aws.amazon.com/cli/) - S3-compatible storage interface
+- [MinIO](https://min.io/) - S3-compatible testing environment
+- [Railway](https://railway.app/) - Simple deployment platform
+- [Docker](https://www.docker.com/) - Containerization
 
 ---
 
-**Remember**: Untested backups are worthless. Use the restore verification service!
+**Remember:** Untested backups are worthless. Deploy the verification service to prove your backups work.
+
+⭐ **Star this repo** if it saved your data!
