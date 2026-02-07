@@ -545,7 +545,7 @@ aws s3api put-bucket-versioning \
 
 #### ✅ DO
 
-1. **Email**: security@yourproject.com (or create private security advisory on GitHub)
+1. **Email**: karam.judeh@gmail.com (or create private security advisory on GitHub)
 2. **Include**:
    - Description of vulnerability
    - Steps to reproduce
@@ -681,7 +681,7 @@ Before deploying to production:
 
 For security questions (not vulnerabilities):
 - GitHub Discussions: https://github.com/yourusername/postgres-backup-railway/discussions
-- Email: security@yourproject.com
+- Email: karam.judeh@gmail.com
 
 For vulnerabilities, use the reporting process above.
 
