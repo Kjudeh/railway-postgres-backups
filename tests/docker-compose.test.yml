@@ -1,12 +1,18 @@
-version: '3.8'
+# Docker Compose configuration for integration testing
+# Compatible with Docker Compose v2+ (no version field required)
+# Minimum required: Docker Compose v2.0 or docker-compose v1.27+
+# Uses depends_on with service_healthy conditions
 
 services:
   # PostgreSQL database for testing (source)
+  # ⚠️ SECURITY WARNING: These credentials are for LOCAL TESTING ONLY
+  # ⚠️ NEVER use these credentials in staging, development, or production environments
+  # ⚠️ Generate random credentials for non-local environments
   postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: testuser
-      POSTGRES_PASSWORD: testpass
+      POSTGRES_PASSWORD: testpass  # TEST ONLY - DO NOT REUSE
       POSTGRES_DB: testdb
     ports:
       - "5432:5432"
@@ -19,11 +25,12 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   # PostgreSQL database for restore verification (target)
+  # ⚠️ SECURITY WARNING: Test credentials only - see warning above
   postgres_verify:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: verifyuser
-      POSTGRES_PASSWORD: verifypass
+      POSTGRES_PASSWORD: verifypass  # TEST ONLY - DO NOT REUSE
       POSTGRES_DB: postgres
     ports:
       - "5433:5432"
@@ -36,12 +43,13 @@ services:
       - postgres_verify_data:/var/lib/postgresql/data
 
   # MinIO S3-compatible storage for testing
+  # ⚠️ SECURITY WARNING: Test credentials only - see warning above
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin123
+      MINIO_ROOT_USER: minioadmin  # TEST ONLY - DO NOT REUSE
+      MINIO_ROOT_PASSWORD: minioadmin123  # TEST ONLY - DO NOT REUSE
     ports:
       - "9000:9000"
       - "9001:9001"
