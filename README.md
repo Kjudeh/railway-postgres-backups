@@ -22,7 +22,7 @@ A complete, tested backup solution for PostgreSQL databases that:
 
 ### One-Click Deploy to Railway
 
-[![Deploy on Railway]([https://railway.com/deploy/sparkling-creation])
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy/sparkling-creation)
 
 Click to deploy both backup and verification services in minutes.
 
