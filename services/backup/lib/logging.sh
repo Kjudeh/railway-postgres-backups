@@ -7,15 +7,11 @@
 # ANSI color codes (disabled in non-TTY)
 if [ -t 1 ]; then
     COLOR_RED='\033[0;31m'
-    COLOR_YELLOW='\033[1;33m'
     COLOR_GREEN='\033[0;32m'
-    COLOR_BLUE='\033[0;34m'
     COLOR_RESET='\033[0m'
 else
     COLOR_RED=''
-    COLOR_YELLOW=''
     COLOR_GREEN=''
-    COLOR_BLUE=''
     COLOR_RESET=''
 fi
 
@@ -48,7 +44,8 @@ log() {
     local level="$1"
     shift
     local message="$*"
-    local timestamp=$(get_timestamp)
+    local timestamp
+    timestamp=$(get_timestamp)
 
     # Scrub secrets
     message=$(scrub_secrets "$message")
@@ -78,14 +75,18 @@ log_debug() {
 
 # Log with colored output (for terminal)
 log_success() {
-    local timestamp=$(get_timestamp)
-    local message=$(scrub_secrets "$*")
+    local timestamp
+    timestamp=$(get_timestamp)
+    local message
+    message=$(scrub_secrets "$*")
     echo -e "${timestamp} ${COLOR_GREEN}SUCCESS${COLOR_RESET} ${message}"
 }
 
 log_failure() {
-    local timestamp=$(get_timestamp)
-    local message=$(scrub_secrets "$*")
+    local timestamp
+    timestamp=$(get_timestamp)
+    local message
+    message=$(scrub_secrets "$*")
     echo -e "${timestamp} ${COLOR_RED}FAILURE${COLOR_RESET} ${message}" >&2
 }
 

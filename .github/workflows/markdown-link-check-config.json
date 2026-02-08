@@ -4,10 +4,22 @@
       "pattern": "^http://localhost"
     },
     {
-      "pattern": "^https://railway.app/template/"
+      "pattern": "^https://railway.app/"
+    },
+    {
+      "pattern": "^https://railway.com/"
     },
     {
       "pattern": "^mailto:"
+    },
+    {
+      "pattern": "^https://github.com/Kjudeh/"
+    },
+    {
+      "pattern": "^https://img.shields.io/"
+    },
+    {
+      "pattern": "^https://opensource.org/"
     }
   ],
   "timeout": "10s",

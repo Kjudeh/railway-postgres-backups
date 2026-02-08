@@ -88,19 +88,20 @@ run_backup_loop() {
         fi
 
         # Calculate next backup time
-        local next_backup=$(date -d "@$(($(date +%s) + BACKUP_INTERVAL))" -Iseconds 2>/dev/null || \
-                           date -v+${BACKUP_INTERVAL}S -Iseconds 2>/dev/null)
+        local next_backup
+        next_backup=$(date -d "@$(($(date +%s) + BACKUP_INTERVAL))" -Iseconds 2>/dev/null || \
+                       date -v+"${BACKUP_INTERVAL}S" -Iseconds 2>/dev/null || echo "unknown")
 
         log_info "Next backup scheduled for: $next_backup (in ${BACKUP_INTERVAL}s)"
 
         # Sleep in chunks to respond to shutdown signal
-        local remaining=$BACKUP_INTERVAL
-        while [ $remaining -gt 0 ] && [ "$SHUTDOWN" = "false" ]; do
+        local remaining="$BACKUP_INTERVAL"
+        while [ "$remaining" -gt 0 ] && [ "$SHUTDOWN" = "false" ]; do
             local sleep_time=10
-            if [ $remaining -lt 10 ]; then
-                sleep_time=$remaining
+            if [ "$remaining" -lt 10 ]; then
+                sleep_time="$remaining"
             fi
-            sleep $sleep_time
+            sleep "$sleep_time"
             remaining=$((remaining - sleep_time))
         done
 

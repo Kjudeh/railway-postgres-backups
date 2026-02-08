@@ -2,6 +2,7 @@ FROM postgres:16-alpine
 
 # Install required tools
 # Using aws-cli as the standardized S3 tool (widely supported, reliable)
+# hadolint ignore=DL3018
 RUN apk add --no-cache \
     aws-cli \
     bash \

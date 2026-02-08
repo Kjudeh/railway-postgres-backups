@@ -16,7 +16,7 @@ retry_with_backoff() {
     local attempt=1
     local delay="$base_delay"
 
-    while [ $attempt -le "$max_attempts" ]; do
+    while [ "$attempt" -le "$max_attempts" ]; do
         log_debug "Attempt $attempt/$max_attempts: ${command[*]}"
 
         if "${command[@]}"; then
@@ -24,7 +24,7 @@ retry_with_backoff() {
             return 0
         fi
 
-        if [ $attempt -lt "$max_attempts" ]; then
+        if [ "$attempt" -lt "$max_attempts" ]; then
             log_warn "Attempt $attempt failed, retrying in ${delay}s..."
             sleep "$delay"
 

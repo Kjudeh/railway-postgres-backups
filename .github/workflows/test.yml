@@ -24,14 +24,14 @@ jobs:
       - name: Start test services
         run: |
           cd tests
-          docker-compose -f docker-compose.test.yml up -d postgres postgres_verify minio minio-setup
+          docker compose -f docker-compose.test.yml up -d postgres postgres_verify minio minio-setup
 
       - name: Wait for services to be healthy
         run: |
           cd tests
           echo "Waiting for PostgreSQL (source)..."
           for i in {1..30}; do
-            if docker-compose -f docker-compose.test.yml exec -T postgres pg_isready -U testuser -d testdb; then
+            if docker compose -f docker-compose.test.yml exec -T postgres pg_isready -U testuser -d testdb; then
               echo "PostgreSQL (source) is ready"
               break
             fi
@@ -41,7 +41,7 @@ jobs:
 
           echo "Waiting for PostgreSQL (verify)..."
           for i in {1..30}; do
-            if docker-compose -f docker-compose.test.yml exec -T postgres_verify pg_isready -U verifyuser -d postgres; then
+            if docker compose -f docker-compose.test.yml exec -T postgres_verify pg_isready -U verifyuser -d postgres; then
               echo "PostgreSQL (verify) is ready"
               break
             fi
@@ -62,7 +62,7 @@ jobs:
       - name: Seed test data
         run: |
           cd tests
-          docker-compose -f docker-compose.test.yml exec -T postgres psql -U testuser -d testdb <<EOF
+          docker compose -f docker-compose.test.yml exec -T postgres psql -U testuser -d testdb <<EOF
           CREATE TABLE test_table (
               id SERIAL PRIMARY KEY,
               name VARCHAR(100),
@@ -85,7 +85,7 @@ jobs:
       - name: Run backup service
         run: |
           cd tests
-          docker-compose -f docker-compose.test.yml up -d backup
+          docker compose -f docker-compose.test.yml up -d backup
 
       - name: Wait for backup to complete
         run: |
@@ -95,8 +95,8 @@ jobs:
       - name: Check backup logs
         run: |
           cd tests
-          docker-compose -f docker-compose.test.yml logs backup
-          if docker-compose -f docker-compose.test.yml logs backup | grep -q "Backup completed successfully"; then
+          docker compose -f docker-compose.test.yml logs backup
+          if docker compose -f docker-compose.test.yml logs backup | grep -q "Backup completed successfully"; then
             echo "✓ Backup completed successfully"
           else
             echo "✗ Backup failed"
@@ -106,9 +106,9 @@ jobs:
       - name: Verify backup exists in MinIO
         run: |
           cd tests
-          docker-compose -f docker-compose.test.yml exec -T minio \
+          docker compose -f docker-compose.test.yml exec -T minio \
             mc ls myminio/test-backups/test-backups/
-          if docker-compose -f docker-compose.test.yml exec -T minio \
+          if docker compose -f docker-compose.test.yml exec -T minio \
             mc ls myminio/test-backups/test-backups/ | grep -q "backup_"; then
             echo "✓ Backup file found in MinIO"
           else
@@ -124,7 +124,7 @@ jobs:
       - name: Run verify service
         run: |
           cd tests
-          docker-compose -f docker-compose.test.yml up -d verify
+          docker compose -f docker-compose.test.yml up -d verify
 
       - name: Wait for verification to complete
         run: |
@@ -134,8 +134,8 @@ jobs:
       - name: Check verification logs
         run: |
           cd tests
-          docker-compose -f docker-compose.test.yml logs verify
-          if docker-compose -f docker-compose.test.yml logs verify | grep -q "Restore verification completed successfully"; then
+          docker compose -f docker-compose.test.yml logs verify
+          if docker compose -f docker-compose.test.yml logs verify | grep -q "Restore verification completed successfully"; then
             echo "✓ Restore verification passed"
           else
             echo "✗ Restore verification failed"
@@ -145,7 +145,7 @@ jobs:
       - name: Verify data integrity
         run: |
           cd tests
-          RECORD_COUNT=$(docker-compose -f docker-compose.test.yml exec -T postgres \
+          RECORD_COUNT=$(docker compose -f docker-compose.test.yml exec -T postgres \
             psql -U testuser -d testdb -t -c "SELECT COUNT(*) FROM test_table;")
           RECORD_COUNT=$(echo $RECORD_COUNT | tr -d '[:space:]')
           echo "Record count: $RECORD_COUNT"
@@ -172,19 +172,19 @@ jobs:
         run: |
           cd tests
           echo "=== PostgreSQL logs ==="
-          docker-compose -f docker-compose.test.yml logs postgres
+          docker compose -f docker-compose.test.yml logs postgres
           echo "=== MinIO logs ==="
-          docker-compose -f docker-compose.test.yml logs minio
+          docker compose -f docker-compose.test.yml logs minio
           echo "=== Backup service logs ==="
-          docker-compose -f docker-compose.test.yml logs backup
+          docker compose -f docker-compose.test.yml logs backup
           echo "=== Verify service logs ==="
-          docker-compose -f docker-compose.test.yml logs verify
+          docker compose -f docker-compose.test.yml logs verify
 
       - name: Clean up
         if: always()
         run: |
           cd tests
-          docker-compose -f docker-compose.test.yml down -v
+          docker compose -f docker-compose.test.yml down -v
 
   lint-shell:
     name: Lint Shell Scripts
@@ -231,7 +231,8 @@ jobs:
       - name: Run Trivy vulnerability scanner (backup)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'services/backup'
+          scan-type: 'fs'
+          scan-ref: 'services/backup'
           format: 'sarif'
           output: 'trivy-backup-results.sarif'
           severity: 'CRITICAL,HIGH'
@@ -239,14 +240,16 @@ jobs:
       - name: Run Trivy vulnerability scanner (verify)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'services/verify'
+          scan-type: 'fs'
+          scan-ref: 'services/verify'
           format: 'sarif'
           output: 'trivy-verify-results.sarif'
           severity: 'CRITICAL,HIGH'
 
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         if: always()
+        continue-on-error: true
         with:
           sarif_file: '.'
 

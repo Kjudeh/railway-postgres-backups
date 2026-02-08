@@ -12,8 +12,10 @@ source /app/lib/utils.sh
 
 # Backup workflow
 main() {
-    local start_time=$(date +%s)
-    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local start_time
+    start_time=$(date +%s)
+    local timestamp
+    timestamp=$(date +%Y%m%d_%H%M%S)
     local backup_filename="backup_${timestamp}.sql.gz"
     local backup_path="/tmp/${backup_filename}"
     local encrypted_path="${backup_path}.enc"
@@ -59,7 +61,8 @@ main() {
     fi
 
     # Step 7: Calculate duration and log success
-    local end_time=$(date +%s)
+    local end_time
+    end_time=$(date +%s)
     local duration=$((end_time - start_time))
 
     log_success "Backup completed successfully in ${duration}s"
@@ -82,7 +85,7 @@ check_connectivity() {
         errors=$((errors + 1))
     fi
 
-    if [ $errors -gt 0 ]; then
+    if [ "$errors" -gt 0 ]; then
         log_error "Connectivity check failed ($errors error(s))"
         return 1
     fi
@@ -101,7 +104,8 @@ perform_dump() {
     log_debug "Compression level: $COMPRESSION_LEVEL"
 
     # Build pg_dump command
-    local dump_start=$(date +%s)
+    local dump_start
+    dump_start=$(date +%s)
 
     # Use pipe to compress on-the-fly
     if pg_dump \
@@ -117,7 +121,8 @@ perform_dump() {
         grep -v "^pg_dump: " | \
         gzip "-${COMPRESSION_LEVEL}" > "$output_file"; then
 
-        local dump_end=$(date +%s)
+        local dump_end
+        dump_end=$(date +%s)
         local dump_duration=$((dump_end - dump_start))
 
         # Verify file was created and is not empty
@@ -126,13 +131,15 @@ perform_dump() {
             return 1
         fi
 
-        local file_size=$(get_file_size "$output_file")
+        local file_size
+        file_size=$(get_file_size "$output_file")
         if [ "$file_size" -eq 0 ]; then
             log_error "Dump file is empty"
             return 1
         fi
 
-        local size_human=$(format_bytes "$file_size")
+        local size_human
+        size_human=$(format_bytes "$file_size")
         log_info "Dump completed in ${dump_duration}s, size: $size_human"
 
         return 0
@@ -162,8 +169,10 @@ encrypt_backup() {
         -out "$output_file" \
         -pass "pass:$BACKUP_ENCRYPTION_KEY" 2>&1; then
 
-        local encrypted_size=$(get_file_size "$output_file")
-        local size_human=$(format_bytes "$encrypted_size")
+        local encrypted_size
+        encrypted_size=$(get_file_size "$output_file")
+        local size_human
+        size_human=$(format_bytes "$encrypted_size")
 
         log_info "Encryption completed, size: $size_human"
         return 0
@@ -182,20 +191,24 @@ upload_to_s3() {
     log_debug "Source: $local_file"
     log_debug "Destination: s3://${S3_BUCKET}/${s3_key}"
 
-    local file_size=$(get_file_size "$local_file")
-    local size_human=$(format_bytes "$file_size")
+    local file_size
+    file_size=$(get_file_size "$local_file")
+    local size_human
+    size_human=$(format_bytes "$file_size")
 
     log_info "Upload size: $size_human"
 
     # Upload with metadata
-    local upload_start=$(date +%s)
+    local upload_start
+    upload_start=$(date +%s)
 
     if retry_with_backoff "$RETRY_ATTEMPTS" "$RETRY_DELAY" \
         aws s3 cp "$local_file" "s3://${S3_BUCKET}/${s3_key}" \
             --endpoint-url "$S3_ENDPOINT" \
             --metadata "timestamp=$(date -Iseconds),database=$PGDATABASE,host=$PGHOST,size=$file_size"; then
 
-        local upload_end=$(date +%s)
+        local upload_end
+        upload_end=$(date +%s)
         local upload_duration=$((upload_end - upload_start))
 
         log_info "Upload completed in ${upload_duration}s"
@@ -224,8 +237,9 @@ prune_old_backups() {
     log_debug "Retention policy: $BACKUP_RETENTION_DAYS days"
 
     # Calculate cutoff date
-    local cutoff_date=$(date -d "${BACKUP_RETENTION_DAYS} days ago" +%Y%m%d 2>/dev/null || \
-                       date -v-${BACKUP_RETENTION_DAYS}d +%Y%m%d 2>/dev/null)
+    local cutoff_date
+    cutoff_date=$(date -d "${BACKUP_RETENTION_DAYS} days ago" +%Y%m%d 2>/dev/null || \
+                   date -v-"${BACKUP_RETENTION_DAYS}d" +%Y%m%d 2>/dev/null)
 
     if [ -z "$cutoff_date" ]; then
         log_error "Failed to calculate cutoff date"

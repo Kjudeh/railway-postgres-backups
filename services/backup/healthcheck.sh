@@ -61,7 +61,7 @@ main() {
         errors=$((errors + 1))
     fi
 
-    if [ $errors -gt 0 ]; then
+    if [ "$errors" -gt 0 ]; then
         log_error "Health check failed: $errors error(s)"
         exit 1
     fi

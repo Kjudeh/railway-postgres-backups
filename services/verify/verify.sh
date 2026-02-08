@@ -76,8 +76,10 @@ send_webhook() {
         return 0
     fi
 
-    local timestamp=$(date -Iseconds)
-    local payload=$(cat <<EOF
+    local timestamp
+    timestamp=$(date -Iseconds)
+    local payload
+    payload=$(cat <<EOF
 {
     "status": "$status",
     "message": "$message",
@@ -107,7 +109,8 @@ EOF
 get_latest_backup() {
     echo "Finding latest backup..."
 
-    local latest_backup=$(aws s3 ls "s3://${S3_BUCKET}/${BACKUP_PREFIX}/" \
+    local latest_backup
+    latest_backup=$(aws s3 ls "s3://${S3_BUCKET}/${BACKUP_PREFIX}/" \
         --endpoint-url "$S3_ENDPOINT" \
         --recursive | \
         grep '\.sql\.gz$' | \
@@ -142,7 +145,8 @@ download_backup() {
         return 1
     fi
 
-    local size=$(du -h "$local_path" | cut -f1)
+    local size
+    size=$(du -h "$local_path" | cut -f1)
     echo "Downloaded: $size"
 
     return 0
@@ -197,14 +201,15 @@ run_verification() {
     if ! psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$temp_db" \
         -c "SELECT version();" > /dev/null 2>&1; then
         echo "ERROR: Cannot connect to database" >&2
-        ((failed++))
+        failed=$((failed + 1))
     else
         echo "    ✓ Database is accessible"
     fi
 
     # Check 2: Count tables and verify minimum
     echo "  - Checking table count..."
-    local table_count=$(psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$temp_db" \
+    local table_count
+    table_count=$(psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$temp_db" \
         -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';" \
         2>/dev/null | tr -d ' ' || echo "0")
 
@@ -212,7 +217,7 @@ run_verification() {
         echo "    ✓ Found $table_count tables (minimum: $MIN_TABLE_COUNT)"
     else
         echo "ERROR: Found $table_count tables, expected minimum: $MIN_TABLE_COUNT" >&2
-        ((failed++))
+        failed=$((failed + 1))
     fi
 
     # Check 3: Verify row counts
@@ -236,7 +241,7 @@ run_verification() {
         else
             echo "ERROR: Custom VERIFY_SQL failed" >&2
             echo "SQL: $VERIFY_SQL" >&2
-            ((failed++))
+            failed=$((failed + 1))
         fi
     fi
 
@@ -248,11 +253,11 @@ run_verification() {
             echo "    ✓ Custom test queries passed"
         else
             echo "ERROR: Custom test queries failed" >&2
-            ((failed++))
+            failed=$((failed + 1))
         fi
     fi
 
-    if [ $failed -gt 0 ]; then
+    if [ "$failed" -gt 0 ]; then
         echo "FAILED: $failed verification check(s) failed" >&2
         return 1
     fi
@@ -276,8 +281,10 @@ cleanup_temp_database() {
 
 # Main verification function
 perform_verification() {
-    local start_time=$(date +%s)
-    local timestamp=$(date +%Y%m%d_%H%M%S)
+    local start_time
+    start_time=$(date +%s)
+    local timestamp
+    timestamp=$(date +%Y%m%d_%H%M%S)
     local temp_db="verify_${timestamp}"
     local backup_file="/tmp/backup_${timestamp}.sql.gz"
 
@@ -292,8 +299,7 @@ perform_verification() {
         backup_filename="$VERIFY_BACKUP_FILE"
         echo "Verifying specific backup: $VERIFY_BACKUP_FILE"
     elif [ "$VERIFY_LATEST" = "true" ]; then
-        s3_key=$(get_latest_backup)
-        if [ $? -ne 0 ]; then
+        if ! s3_key=$(get_latest_backup); then
             send_webhook "error" "No backups found in S3" "" "0"
             return 1
         fi
@@ -330,7 +336,7 @@ perform_verification() {
 
     # Run verification queries
     local verify_success=0
-    if [ $restore_success -eq 0 ]; then
+    if [ "$restore_success" -eq 0 ]; then
         if ! run_verification "$temp_db"; then
             verify_success=1
         fi
@@ -341,15 +347,16 @@ perform_verification() {
     cleanup_temp_database "$temp_db"
 
     # Calculate duration
-    local end_time=$(date +%s)
+    local end_time
+    end_time=$(date +%s)
     local duration=$((end_time - start_time))
 
     # Report results
-    if [ $restore_success -ne 0 ]; then
+    if [ "$restore_success" -ne 0 ]; then
         echo "FAILURE: Restore verification failed - restore step failed"
         send_webhook "failure" "Restore step failed" "$backup_filename" "$duration"
         return 1
-    elif [ $verify_success -ne 0 ]; then
+    elif [ "$verify_success" -ne 0 ]; then
         echo "FAILURE: Restore verification failed - verification checks failed"
         send_webhook "failure" "Verification checks failed" "$backup_filename" "$duration"
         return 1

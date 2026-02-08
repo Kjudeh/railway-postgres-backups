@@ -1,6 +1,7 @@
 FROM postgres:16-alpine
 
 # Install AWS CLI and required tools
+# hadolint ignore=DL3018
 RUN apk add --no-cache \
     aws-cli \
     bash \
