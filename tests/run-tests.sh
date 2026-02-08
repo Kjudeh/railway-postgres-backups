@@ -172,8 +172,8 @@ fi
 # Test 2: Verify backup exists in MinIO
 echo ""
 echo "Test 2: Verifying backup exists in MinIO..."
-BACKUP_LIST=$($COMPOSE_CMD -f docker-compose.test.yml exec -T minio \
-    mc ls myminio/test-backups/test-backups/)
+BACKUP_LIST=$($COMPOSE_CMD -f docker-compose.test.yml exec -T backup \
+    aws s3 ls "s3://test-backups/test-backups/" --endpoint-url http://minio:9000)
 
 if echo "$BACKUP_LIST" | grep -q "backup_"; then
     echo -e "${GREEN}✓ Backup file found in MinIO${NC}"
@@ -184,20 +184,14 @@ fi
 
 # Test 2a: Verify backup size > 0
 echo "Verifying backup size > 0..."
-BACKUP_SIZE=$(echo "$BACKUP_LIST" | grep "backup_" | head -1 | awk '{print $4}')
+BACKUP_SIZE=$(echo "$BACKUP_LIST" | grep "backup_" | head -1 | awk '{print $3}')
 
-# Extract numeric value (remove B, KiB, MiB, etc.)
-BACKUP_SIZE_NUM=$(echo "$BACKUP_SIZE" | sed 's/[^0-9.]//g')
-
-if [ -z "$BACKUP_SIZE_NUM" ] || [ "$(echo "$BACKUP_SIZE_NUM <= 0" | bc -l 2>/dev/null || echo "0")" -eq 1 ]; then
-    # Fallback: check if size string is empty or "0"
-    if [ -z "$BACKUP_SIZE" ] || [ "$BACKUP_SIZE" = "0" ] || [ "$BACKUP_SIZE" = "0B" ]; then
-        echo -e "${RED}✗ Backup file size is 0 or invalid${NC}"
-        exit 1
-    fi
+if [ -z "$BACKUP_SIZE" ] || [ "$BACKUP_SIZE" -eq 0 ]; then
+    echo -e "${RED}✗ Backup file size is 0 or invalid${NC}"
+    exit 1
 fi
 
-echo -e "${GREEN}✓ Backup size verified: $BACKUP_SIZE${NC}"
+echo -e "${GREEN}✓ Backup size verified: ${BACKUP_SIZE} bytes${NC}"
 
 # Test 3: Run verify service
 echo ""
@@ -313,12 +307,14 @@ else
     OLD_BACKUP_NAME="test-backups/backup_${OLD_DATE}_${OLD_TIME}.sql.gz"
 
     echo "Creating simulated old backup: $OLD_BACKUP_NAME"
-    echo "test old backup content" | $COMPOSE_CMD -f docker-compose.test.yml exec -T minio \
-        mc pipe myminio/test-backups/$OLD_BACKUP_NAME
+    $COMPOSE_CMD -f docker-compose.test.yml exec -T backup \
+        sh -c "echo 'test old backup content' | gzip > /tmp/old_backup.sql.gz && \
+               aws s3 cp /tmp/old_backup.sql.gz 's3://test-backups/${OLD_BACKUP_NAME}' --endpoint-url http://minio:9000 && \
+               rm /tmp/old_backup.sql.gz"
 
     # Verify old backup was created
-    if $COMPOSE_CMD -f docker-compose.test.yml exec -T minio \
-        mc ls myminio/test-backups/test-backups/ | grep -q "backup_${OLD_DATE}"; then
+    if $COMPOSE_CMD -f docker-compose.test.yml exec -T backup \
+        aws s3 ls "s3://test-backups/test-backups/" --endpoint-url http://minio:9000 | grep -q "backup_${OLD_DATE}"; then
         echo -e "${GREEN}✓ Old backup created for testing${NC}"
     else
         echo -e "${RED}✗ Failed to create old backup for testing${NC}"
@@ -340,8 +336,8 @@ else
     fi
 
     # Check if old backup was deleted
-    if $COMPOSE_CMD -f docker-compose.test.yml exec -T minio \
-        mc ls myminio/test-backups/test-backups/ | grep -q "backup_${OLD_DATE}"; then
+    if $COMPOSE_CMD -f docker-compose.test.yml exec -T backup \
+        aws s3 ls "s3://test-backups/test-backups/" --endpoint-url http://minio:9000 | grep -q "backup_${OLD_DATE}"; then
         echo -e "${YELLOW}⚠ Old backup still exists after retention period${NC}"
         echo "  This may indicate retention policy is not working correctly"
         echo "  Backup logs:"
@@ -352,8 +348,8 @@ else
     fi
 
     # Verify new backup still exists
-    CURRENT_BACKUPS=$($COMPOSE_CMD -f docker-compose.test.yml exec -T minio \
-        mc ls myminio/test-backups/test-backups/ | grep "backup_" | grep -v "backup_${OLD_DATE}" | wc -l)
+    CURRENT_BACKUPS=$($COMPOSE_CMD -f docker-compose.test.yml exec -T backup \
+        aws s3 ls "s3://test-backups/test-backups/" --endpoint-url http://minio:9000 | grep "backup_" | grep -v "backup_${OLD_DATE}" | wc -l)
 
     if [ "$CURRENT_BACKUPS" -ge 1 ]; then
         echo -e "${GREEN}✓ Recent backups retained ($CURRENT_BACKUPS backups)${NC}"

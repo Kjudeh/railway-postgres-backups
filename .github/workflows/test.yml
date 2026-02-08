@@ -107,10 +107,11 @@ jobs:
       - name: Verify backup exists in MinIO
         run: |
           cd tests
-          docker compose -f docker-compose.test.yml exec -T minio \
-            mc ls myminio/test-backups/test-backups/
-          if docker compose -f docker-compose.test.yml exec -T minio \
-            mc ls myminio/test-backups/test-backups/ | grep -q "backup_"; then
+          echo "Listing backups in MinIO..."
+          docker compose -f docker-compose.test.yml exec -T backup \
+            aws s3 ls "s3://test-backups/test-backups/" --endpoint-url http://minio:9000
+          if docker compose -f docker-compose.test.yml exec -T backup \
+            aws s3 ls "s3://test-backups/test-backups/" --endpoint-url http://minio:9000 | grep -q "backup_"; then
             echo "✓ Backup file found in MinIO"
           else
             echo "✗ Backup file not found in MinIO"
@@ -224,6 +225,8 @@ jobs:
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
 
     steps:
       - name: Checkout code
@@ -247,12 +250,21 @@ jobs:
           output: 'trivy-verify-results.sarif'
           severity: 'CRITICAL,HIGH'
 
-      - name: Upload Trivy results to GitHub Security
+      - name: Upload Trivy backup results
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         continue-on-error: true
         with:
-          sarif_file: '.'
+          sarif_file: 'trivy-backup-results.sarif'
+          category: 'trivy-backup'
+
+      - name: Upload Trivy verify results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: 'trivy-verify-results.sarif'
+          category: 'trivy-verify'
 
   docs-check:
     name: Documentation Check
