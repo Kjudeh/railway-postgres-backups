@@ -21,7 +21,7 @@ railway add postgres
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/yourusername/postgres-backup-railway.git
+git clone https://github.com/Kjudeh/railway-postgres-backups.git
 cd postgres-backup-railway
 ```
 
@@ -216,8 +216,8 @@ See [Troubleshooting Guide](docs/troubleshooting.md) for more help.
 ## Support
 
 - [Documentation](docs/)
-- [GitHub Issues](https://github.com/yourusername/postgres-backup-railway/issues)
-- [Discussions](https://github.com/yourusername/postgres-backup-railway/discussions)
+- [GitHub Issues](https://github.com/Kjudeh/railway-postgres-backups/issues)
+- [Discussions](https://github.com/Kjudeh/railway-postgres-backups/discussions)
 
 ## Important Reminders
 
