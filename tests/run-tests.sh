@@ -310,8 +310,11 @@ else
                rm /tmp/old_backup.sql.gz"
 
     # Verify old backup was created
-    if $COMPOSE_CMD -f docker-compose.test.yml exec -T backup \
-        aws s3 ls "s3://test-backups/test-backups/" --endpoint-url http://minio:9000 | grep -q "backup_${OLD_DATE}"; then
+    # NOTE: avoid piping exec directly to grep — pipefail + SIGPIPE causes
+    # false failures when grep -q closes the pipe early.
+    OLD_BACKUP_LS=$($COMPOSE_CMD -f docker-compose.test.yml exec -T backup \
+        aws s3 ls "s3://test-backups/test-backups/" --endpoint-url http://minio:9000 2>&1) || true
+    if echo "$OLD_BACKUP_LS" | grep -q "backup_${OLD_DATE}"; then
         echo -e "${GREEN}✓ Old backup created for testing${NC}"
     else
         echo -e "${RED}✗ Failed to create old backup for testing${NC}"
@@ -333,8 +336,9 @@ else
     fi
 
     # Check if old backup was deleted
-    if $COMPOSE_CMD -f docker-compose.test.yml exec -T backup \
-        aws s3 ls "s3://test-backups/test-backups/" --endpoint-url http://minio:9000 | grep -q "backup_${OLD_DATE}"; then
+    RETENTION_LS=$($COMPOSE_CMD -f docker-compose.test.yml exec -T backup \
+        aws s3 ls "s3://test-backups/test-backups/" --endpoint-url http://minio:9000 2>&1) || true
+    if echo "$RETENTION_LS" | grep -q "backup_${OLD_DATE}"; then
         echo -e "${YELLOW}⚠ Old backup still exists after retention period${NC}"
         echo "  This may indicate retention policy is not working correctly"
         echo "  Backup logs:"
@@ -345,8 +349,9 @@ else
     fi
 
     # Verify new backup still exists
-    CURRENT_BACKUPS=$($COMPOSE_CMD -f docker-compose.test.yml exec -T backup \
-        aws s3 ls "s3://test-backups/test-backups/" --endpoint-url http://minio:9000 | grep "backup_" | grep -v "backup_${OLD_DATE}" | wc -l)
+    REMAINING_LS=$($COMPOSE_CMD -f docker-compose.test.yml exec -T backup \
+        aws s3 ls "s3://test-backups/test-backups/" --endpoint-url http://minio:9000 2>&1) || true
+    CURRENT_BACKUPS=$(echo "$REMAINING_LS" | grep "backup_" | grep -v "backup_${OLD_DATE}" | wc -l)
 
     if [ "$CURRENT_BACKUPS" -ge 1 ]; then
         echo -e "${GREEN}✓ Recent backups retained ($CURRENT_BACKUPS backups)${NC}"
