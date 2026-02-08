@@ -158,6 +158,11 @@ jobs:
             exit 1
           fi
 
+      - name: Tear down inline test services
+        run: |
+          cd tests
+          docker compose -f docker-compose.test.yml down -v --remove-orphans 2>/dev/null || true
+
       - name: Run shell script tests
         run: |
           cd tests

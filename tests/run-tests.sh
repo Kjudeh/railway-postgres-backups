@@ -51,24 +51,6 @@ else
     COMPOSE_CMD="docker-compose"
 fi
 
-# Check port availability
-echo "Checking port availability..."
-for port in 5432 5433 9000 9001; do
-    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1 || netstat -an 2>/dev/null | grep -q ":$port.*LISTEN"; then
-        echo -e "${RED}ERROR: Port $port is already in use. Please free the port and try again.${NC}"
-        echo "  Tip: Use 'lsof -i :$port' or 'docker ps' to find what's using it"
-        exit 1
-    fi
-done
-
-# Check available disk space (need at least 5GB)
-AVAILABLE_SPACE=$(df -BG . | tail -1 | awk '{print $4}' | sed 's/G//')
-if [ "$AVAILABLE_SPACE" -lt 5 ]; then
-    echo -e "${YELLOW}WARNING: Less than 5GB disk space available. Tests may fail.${NC}"
-fi
-
-echo -e "${GREEN}✓ All preflight checks passed${NC}"
-
 # ========================================
 # CLEANUP FUNCTIONS
 # ========================================
@@ -91,10 +73,29 @@ cleanup() {
 }
 
 # Clean up any existing test infrastructure before starting
+# (must run before port check so leftover containers don't block ports)
 cleanup_force
 
 # Set trap for cleanup on exit/interrupt
 trap cleanup_force EXIT INT TERM
+
+# Check port availability
+echo "Checking port availability..."
+for port in 5432 5433 9000 9001; do
+    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1 || netstat -an 2>/dev/null | grep -q ":$port.*LISTEN"; then
+        echo -e "${RED}ERROR: Port $port is already in use. Please free the port and try again.${NC}"
+        echo "  Tip: Use 'lsof -i :$port' or 'docker ps' to find what's using it"
+        exit 1
+    fi
+done
+
+# Check available disk space (need at least 5GB)
+AVAILABLE_SPACE=$(df -BG . | tail -1 | awk '{print $4}' | sed 's/G//')
+if [ "$AVAILABLE_SPACE" -lt 5 ]; then
+    echo -e "${YELLOW}WARNING: Less than 5GB disk space available. Tests may fail.${NC}"
+fi
+
+echo -e "${GREEN}✓ All preflight checks passed${NC}"
 
 # Start services
 echo ""
