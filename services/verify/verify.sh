@@ -178,8 +178,7 @@ restore_backup() {
         psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$temp_db" \
         --quiet \
         --set ON_ERROR_STOP=on 2>&1 | \
-        grep -v "already exists" | \
-        grep -v "does not exist" || true; then
+        { grep -v "already exists" | grep -v "does not exist" || true; }; then
         echo "ERROR: Restore failed" >&2
         return 1
     fi
