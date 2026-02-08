@@ -107,7 +107,7 @@ EOF
 
 # Function to get latest backup from S3
 get_latest_backup() {
-    echo "Finding latest backup..."
+    echo "Finding latest backup..." >&2
 
     local latest_backup
     latest_backup=$(aws s3 ls "s3://${S3_BUCKET}/${BACKUP_PREFIX}/" \
