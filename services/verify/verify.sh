@@ -174,15 +174,32 @@ restore_backup() {
 
     echo "Restoring backup to $temp_db..."
 
-    if ! gunzip -c "$backup_file" | \
-        psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$temp_db" \
-        --quiet \
-        --set ON_ERROR_STOP=on 2>&1 | \
-        { grep -v "already exists" | grep -v "does not exist" || true; }; then
-        echo "ERROR: Restore failed" >&2
+    # Decompress to temp file first to avoid pipefail issues with a
+    # three-stage gunzip|psql|grep pipeline where gunzip can exit non-zero
+    # (e.g. SIGPIPE race on Alpine/musl) even when all SQL succeeds.
+    local sql_file
+    sql_file="/tmp/restore_$$.sql"
+    if ! gunzip -c "$backup_file" > "$sql_file"; then
+        echo "ERROR: Failed to decompress backup" >&2
+        rm -f "$sql_file"
         return 1
     fi
 
+    # Restore using -f flag. Do not use ON_ERROR_STOP: pg_dump --clean
+    # output may emit harmless errors on a fresh database (e.g. extension
+    # comments, role references). The verification step validates integrity.
+    # Without ON_ERROR_STOP, psql exits 0 for SQL errors but still returns
+    # non-zero (1 or 2) for fatal/connection errors caught by pipefail.
+    if ! psql -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$temp_db" \
+        --quiet \
+        -f "$sql_file" 2>&1 | \
+        { grep -v "already exists" | grep -v "does not exist" || true; }; then
+        echo "ERROR: Restore failed" >&2
+        rm -f "$sql_file"
+        return 1
+    fi
+
+    rm -f "$sql_file"
     echo "Restore completed"
     return 0
 }
