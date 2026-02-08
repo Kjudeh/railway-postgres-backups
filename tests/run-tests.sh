@@ -76,13 +76,18 @@ cleanup() {
 # (must run before port check so leftover containers don't block ports)
 cleanup_force
 
+# Stop system PostgreSQL if running (common on CI runners like GitHub Actions)
+if command -v systemctl &> /dev/null; then
+    sudo systemctl stop postgresql 2>/dev/null || true
+fi
+
 # Set trap for cleanup on exit/interrupt
 trap cleanup_force EXIT INT TERM
 
 # Check port availability
 echo "Checking port availability..."
 for port in 5432 5433 9000 9001; do
-    if lsof -Pi :$port -sTCP:LISTEN -t >/dev/null 2>&1 || netstat -an 2>/dev/null | grep -q ":$port.*LISTEN"; then
+    if lsof -Pi :"$port" -sTCP:LISTEN -t >/dev/null 2>&1 || netstat -an 2>/dev/null | grep -q ":$port.*LISTEN"; then
         echo -e "${RED}ERROR: Port $port is already in use. Please free the port and try again.${NC}"
         echo "  Tip: Use 'lsof -i :$port' or 'docker ps' to find what's using it"
         exit 1
