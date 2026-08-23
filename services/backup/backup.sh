@@ -9,6 +9,7 @@ set -euo pipefail
 # Load libraries
 source /app/lib/logging.sh
 source /app/lib/utils.sh
+source /app/lib/config.sh
 
 # Backup workflow
 main() {
