@@ -13,6 +13,14 @@ source /app/lib/config.sh
 
 # Backup workflow
 main() {
+    # Load + validate config here too, so backup.sh works standalone and
+    # never hits set -u on unexported vars when entrypoint validation failed
+    if ! load_config; then
+        log_error "Configuration invalid or incomplete - skipping backup"
+        sleep 30  # avoid hot-looping when the runner retries immediately
+        return 1
+    fi
+
     local start_time
     start_time=$(date +%s)
     local timestamp
