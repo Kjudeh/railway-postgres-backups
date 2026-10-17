@@ -1,4 +1,4 @@
-FROM postgres:16-alpine
+FROM postgres:18-alpine
 
 # Install AWS CLI and required tools
 # hadolint ignore=DL3018

@@ -1,4 +1,4 @@
-FROM postgres:16-alpine
+FROM postgres:18-alpine
 
 # Install required tools
 # Using aws-cli as the standardized S3 tool (widely supported, reliable)
