@@ -247,8 +247,11 @@ prune_old_backups() {
 
     # Calculate cutoff date
     local cutoff_date
-    cutoff_date=$(date -d "${BACKUP_RETENTION_DAYS} days ago" +%Y%m%d 2>/dev/null || \
-                   date -v-"${BACKUP_RETENTION_DAYS}d" +%Y%m%d 2>/dev/null)
+    # Portable across GNU, BSD and BusyBox/Alpine date: epoch arithmetic, then format.
+    local cutoff_epoch
+    cutoff_epoch=$(( $(date +%s) - BACKUP_RETENTION_DAYS * 86400 ))
+    cutoff_date=$(date -u -d "@${cutoff_epoch}" +%Y%m%d 2>/dev/null || \
+                   date -u -r "${cutoff_epoch}" +%Y%m%d 2>/dev/null)
 
     if [ -z "$cutoff_date" ]; then
         log_error "Failed to calculate cutoff date"
